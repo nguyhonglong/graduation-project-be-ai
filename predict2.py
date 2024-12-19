@@ -13,6 +13,8 @@ from contextlib import asynccontextmanager
 import joblib
 from pathlib import Path
 from fastapi.security.api_key import APIKeyHeader, APIKey
+import requests
+from io import BytesIO
 
 # Add API key configuration
 API_KEY = "12345"
@@ -26,19 +28,18 @@ async def get_api_key(api_key_header: str = Security(api_key_header)):
         )
     return api_key_header
 
-def load_saved_model(model_path, input_dim=9):
-    """Load the saved model and prepare it for inference"""
-    if not Path(model_path).exists():
-        raise FileNotFoundError(f"Model file not found at {model_path}")
-    
-    model = TimeSeriesTransformer(input_dim=input_dim)
-    try:
-        checkpoint = torch.load(model_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.eval()
-        return model
-    except Exception as e:
-        raise RuntimeError(f"Error loading model: {str(e)}")
+def download_model(url):
+    response = requests.get(url)
+    return BytesIO(response.content)
+
+def load_models():
+    global model, health_model, life_expectation_model
+    if model is None:
+        # Replace these URLs with your actual cloud storage URLs
+        model_url = "https://datn-nhl.s3.ap-northeast-1.amazonaws.com/predict/best_model.pth"
+        model_data = download_model(model_url)
+        model = torch.load(model_data)
+        # ... load other models similarly
 
 def predict_next_5_days(model, last_30_days):
     """Make predictions for the next 5 days without scaling"""
@@ -58,19 +59,6 @@ scaler1 = None  # for input features
 scaler2 = None  # for health index
 scaler3 = None  # for life expectation input
 scaler4 = None  # for life expectation output
-
-def load_models():
-    global model, scaler, health_model, life_expectation_model, scaler1, scaler2, scaler3, scaler4
-    if model is None:
-        # historical_data = load_data()
-        model = load_saved_model('predict/best_model.pth')
-        # scaler = prepare_scaler(historical_data)
-        health_model = joblib.load(Path('health_index/xgboost.joblib'))
-        life_expectation_model = joblib.load(Path('life_expectation/xgboost.joblib'))
-        scaler1 = joblib.load(Path('health_index/scaler1.joblib'))
-        scaler2 = joblib.load(Path('health_index/scaler2.joblib'))
-        scaler3 = joblib.load(Path('life_expectation/scaler1.joblib'))
-        scaler4 = joblib.load(Path('life_expectation/scaler2.joblib'))
 
 # Initialize FastAPI app
 app = FastAPI(
