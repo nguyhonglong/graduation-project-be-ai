@@ -28,18 +28,55 @@ async def get_api_key(api_key_header: str = Security(api_key_header)):
         )
     return api_key_header
 
+# Add these URLs - replace with your actual S3 or cloud storage URLs
+MODEL_URLS = {
+    'transformer': "https://datn-nhl.s3.ap-northeast-1.amazonaws.com/predict/best_model.pth",
+    'health': "https://datn-nhl.s3.ap-northeast-1.amazonaws.com/health_index/xgboost.joblib",
+    'life_expectation': "https://datn-nhl.s3.ap-northeast-1.amazonaws.com/life_expectation/xgboost.joblib",
+    'scaler1': "https://datn-nhl.s3.ap-northeast-1.amazonaws.com/health_index/scaler1.joblib",
+    'scaler2': "https://datn-nhl.s3.ap-northeast-1.amazonaws.com/health_index/scaler2.joblib",
+    'scaler3': "https://datn-nhl.s3.ap-northeast-1.amazonaws.com/life_expectation/scaler1.joblib",
+    'scaler4': "https://datn-nhl.s3.ap-northeast-1.amazonaws.com/life_expectation/scaler2.joblib"
+}
+
 def download_model(url):
     response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"Failed to download model from {url}")
     return BytesIO(response.content)
 
 def load_models():
-    global model, health_model, life_expectation_model
-    if model is None:
-        # Replace these URLs with your actual cloud storage URLs
-        model_url = "https://datn-nhl.s3.ap-northeast-1.amazonaws.com/predict/best_model.pth"
-        model_data = download_model(model_url)
-        model = torch.load(model_data)
-        # ... load other models similarly
+    global model, health_model, life_expectation_model, scaler1, scaler2, scaler3, scaler4
+    try:
+        if model is None:
+            # Load transformer model
+            model_data = download_model(MODEL_URLS['transformer'])
+            model = torch.load(model_data)
+            model.eval()  # Set to evaluation mode
+
+            # Load health model and its scalers
+            health_data = download_model(MODEL_URLS['health'])
+            health_model = joblib.load(health_data)
+            
+            scaler1_data = download_model(MODEL_URLS['scaler1'])
+            scaler1 = joblib.load(scaler1_data)
+            
+            scaler2_data = download_model(MODEL_URLS['scaler2'])
+            scaler2 = joblib.load(scaler2_data)
+
+            # Load life expectation model and its scalers
+            life_data = download_model(MODEL_URLS['life_expectation'])
+            life_expectation_model = joblib.load(life_data)
+            
+            scaler3_data = download_model(MODEL_URLS['scaler3'])
+            scaler3 = joblib.load(scaler3_data)
+            
+            scaler4_data = download_model(MODEL_URLS['scaler4'])
+            scaler4 = joblib.load(scaler4_data)
+
+    except Exception as e:
+        print(f"Error loading models: {str(e)}")
+        raise
 
 def predict_next_5_days(model, last_30_days):
     """Make predictions for the next 5 days without scaling"""
