@@ -40,26 +40,18 @@ def load_saved_model(model_path, input_dim=9):
     except Exception as e:
         raise RuntimeError(f"Error loading model: {str(e)}")
 
-def prepare_scaler(historical_data):
-    """Prepare the scaler using historical data"""
-    scaler = StandardScaler()
-    scaler.fit(historical_data)
-    return scaler
-
-def predict_next_5_days(model, scaler, last_30_days):
-    """Make predictions for the next 5 days"""
+def predict_next_5_days(model, last_30_days):
+    """Make predictions for the next 5 days without scaling"""
     with torch.no_grad():
-        # Normalize the input
-        normalized_input = scaler.transform(last_30_days)
-        input_seq = torch.FloatTensor(normalized_input).unsqueeze(0)
+        # Convert input directly to tensor without normalization
+        input_seq = torch.FloatTensor(last_30_days).unsqueeze(0)
         
         # Make prediction
         prediction = model(input_seq, training=False)
         prediction = prediction[:, -5:, :]
         
-        # Denormalize the prediction
-        prediction = scaler.inverse_transform(prediction.squeeze(0))
-    return prediction
+        # Return prediction directly without denormalization
+        return prediction.squeeze(0).numpy()
 
 # Add these as global variables at the top with other globals
 scaler1 = None  # for input features
@@ -70,9 +62,9 @@ scaler4 = None  # for life expectation output
 def load_models():
     global model, scaler, health_model, life_expectation_model, scaler1, scaler2, scaler3, scaler4
     if model is None:
-        historical_data = load_data()
+        # historical_data = load_data()
         model = load_saved_model('predict/best_model.pth')
-        scaler = prepare_scaler(historical_data)
+        # scaler = prepare_scaler(historical_data)
         health_model = joblib.load(Path('health_index/xgboost.joblib'))
         life_expectation_model = joblib.load(Path('life_expectation/xgboost.joblib'))
         scaler1 = joblib.load(Path('health_index/scaler1.joblib'))
@@ -191,7 +183,7 @@ async def predict(input_data: PredictionInput, api_key: APIKey = Depends(get_api
             )
 
         # Make predictions
-        predictions = predict_next_5_days(model, scaler, last_30_days)
+        predictions = predict_next_5_days(model, last_30_days)
         
         # # Create visualization
         create_visualization(last_30_days, predictions)
